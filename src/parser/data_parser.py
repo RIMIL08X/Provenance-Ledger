@@ -26,7 +26,7 @@ class DataIngestionEngine:
         if ext in (".csv", ".txt", ".tsv"):
             delimiter = "\t" if ext == ".tsv" else ","
             try:
-                df = pd.read_csv(io.BytesIO(file_bytes), sep=delimiter)
+                df = pd.read_csv(io.BytesIO(file_bytes), sep=delimiter, low_memory=False)
             except Exception:
                 df = pd.read_csv(io.BytesIO(file_bytes), sep=None, engine="python")
 
@@ -47,7 +47,6 @@ class DataIngestionEngine:
                 df = pd.read_json(io.BytesIO(file_bytes))
 
         elif ext == ".docx":
-            # Extract tables first; if no tables, extract paragraphs
             doc = Document(io.BytesIO(file_bytes))
             rows_data = []
             if doc.tables:
@@ -71,39 +70,43 @@ class DataIngestionEngine:
             df = pd.DataFrame(pages_text) if pages_text else pd.DataFrame({"page_number": [1], "text": [""]})
 
         else:
-            # Fallback: treat as plain text
             text = file_bytes.decode("utf-8", errors="replace")
             lines = [l.strip() for l in text.split("\n") if l.strip()]
             df = pd.DataFrame({"line_number": range(1, len(lines) + 1), "text": lines})
 
-        # Ensure DataFrame is non-empty
         if df is None or df.empty:
             df = pd.DataFrame({"info": ["Empty dataset"]})
 
-        # Clean column names
         df.columns = [str(c).strip() for c in df.columns]
 
-        # Compute deterministic content hash
         data_hash = compute_data_snapshot_hash(df)
 
-        # Persist immutable snapshot to disk
         snapshot_path = os.path.join(SNAPSHOT_DIR, f"{data_hash}.parquet")
         try:
             df.to_parquet(snapshot_path, index=False)
         except Exception:
-            # If parquet fails on mixed types, serialize to CSV
             df.to_csv(os.path.join(SNAPSHOT_DIR, f"{data_hash}.csv"), index=False)
 
-        # Build comprehensive summary for the LLM & UI
+        # Optimize preview & metadata payload for ultra-wide datasets (e.g. 25,000+ columns)
+        num_cols = list(df.select_dtypes(include=["number"]).columns)
+        total_cols = len(df.columns)
+        
+        # Take a slice of columns for frontend preview
+        preview_col_limit = min(25, total_cols)
+        preview_df = df.iloc[:10, :preview_col_limit]
+
         summary = {
             "filename": filename,
             "data_hash": data_hash,
             "total_rows": len(df),
-            "total_columns": len(df.columns),
-            "columns": list(df.columns),
-            "dtypes": {str(col): str(dtype) for col, dtype in df.dtypes.items()},
-            "numeric_columns": list(df.select_dtypes(include=["number"]).columns),
-            "sample_records": df.head(10).to_dict(orient="records"),
+            "total_columns": total_cols,
+            "is_wide": total_cols > 100,
+            "columns": list(df.columns[:50]),
+            "preview_columns": list(preview_df.columns),
+            "dtypes": {str(col): str(df[col].dtype) for col in preview_df.columns},
+            "numeric_columns": num_cols[:20],
+            "numeric_column_count": len(num_cols),
+            "sample_records": preview_df.to_dict(orient="records"),
         }
 
         return df, summary, data_hash

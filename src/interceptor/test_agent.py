@@ -36,7 +36,6 @@ class MinimalDataScienceAgent:
             lines = [line for line in raw_text.strip().split("\n") if not line.startswith("#") and not line.startswith("Here")]
             code = "\n".join(lines).strip()
 
-        # Remove any accidental local df definitions so it runs against real in-memory df
         cleaned_lines = []
         for line in code.split("\n"):
             if re.match(r"^\s*df\s*=\s*pd\.DataFrame\(", line):
@@ -63,6 +62,11 @@ class MinimalDataScienceAgent:
                 f"result = {{'value': round(val, 2), 'claim': f'The average {target} is {{round(val, 2)}}'}}"
             )
         elif any(w in prompt_lower for w in ["max", "highest", "maximum"]):
+            if len(cols) > 50 and any(w in prompt_lower for w in ["all", "overall", "across"]):
+                return (
+                    "val = float(df.select_dtypes(include=['number']).max().max())\n"
+                    "result = {'value': round(val, 2), 'claim': f'The maximum value across all columns is {round(val, 2)}'}"
+                )
             target = next((c for c in cols if c.lower() in prompt_lower), num_cols[0] if num_cols else cols[0])
             return (
                 f"val = float(df['{target}'].max())\n"
@@ -81,7 +85,7 @@ class MinimalDataScienceAgent:
                 f"result = {{'value': round(val, 2), 'claim': f'The total {target} is {{round(val, 2)}}'}}"
             )
         elif any(w in prompt_lower for w in ["count", "rows", "size", "length"]):
-            return "cnt = int(len(df))\nresult = {'value': cnt, 'claim': f'Dataset contains {cnt} total rows'}"
+            return f"cnt = int(len(df))\ncols = int(len(df.columns))\nresult = {{'rows': cnt, 'columns': cols, 'claim': f'Dataset contains {{cnt}} rows and {{cols}} columns'}}"
         else:
             first_col = num_cols[0] if num_cols else cols[0]
             return (
@@ -90,22 +94,37 @@ class MinimalDataScienceAgent:
             )
 
     def _generate_code(self, prompt: str, df: pd.DataFrame, seed: Optional[int]) -> str:
-        """Generate analysis code from Gemini or fallback."""
+        """Generate analysis code from Gemini or fallback with token-safe schema formatting."""
         if self.gemini.is_available():
-            schema_info = {str(col): str(dtype) for col, dtype in df.dtypes.items()}
-            sample_preview = df.head(3).to_string()
+            total_cols = len(df.columns)
+            total_rows = len(df)
+            num_cols = list(df.select_dtypes(include=["number"]).columns)
+
+            # Compact representation for wide datasets
+            if total_cols > 50:
+                schema_description = (
+                    f"Dataset Shape: {total_rows} rows x {total_cols} columns (Wide Dataset)\n"
+                    f"Sample Column Names (first 25): {list(df.columns[:25])}\n"
+                    f"Total Numeric Columns: {len(num_cols)}\n"
+                    f"Data Preview (first 3 rows across first 10 columns):\n{df.iloc[:3, :min(10, total_cols)].to_string()}"
+                )
+            else:
+                schema_info = {str(col): str(dtype) for col, dtype in df.dtypes.items()}
+                schema_description = (
+                    f"Dataset Schema: {schema_info}\n"
+                    f"Dataset Shape: {total_rows} rows x {total_cols} columns\n"
+                    f"Data Preview:\n{df.head(3).to_string()}"
+                )
 
             system_instruction = (
                 "You are an expert, meticulous data science agent.\n"
                 "A pandas DataFrame variable named `df` is ALREADY loaded in memory.\n"
-                f"Dataset Schema: {schema_info}\n"
-                f"Dataset Shape: {len(df)} rows x {len(df.columns)} columns\n"
-                f"Data Preview:\n{sample_preview}\n\n"
+                f"{schema_description}\n\n"
                 "RULES:\n"
                 "1. DO NOT recreate, mock, or redefine `df`. Operate directly on `df`.\n"
                 "2. Write Python code to compute the exact answer to the user's question.\n"
                 "3. You MUST assign the final structured dictionary to the variable `result`.\n"
-                "4. `result` MUST have a 'claim' key with a concise, clear natural-language summary (e.g. 'The correlation between tenure and churn is -0.42' or 'The average revenue is $105,200.00').\n"
+                "4. `result` MUST have a 'claim' key with a concise, clear natural-language summary.\n"
                 "5. `result` SHOULD also include relevant numeric keys (e.g. 'r', 'value', 'mean', 'max', 'count').\n"
                 "6. Wrap ONLY executable Python code in ```python ``` fences."
             )
@@ -133,10 +152,8 @@ class MinimalDataScienceAgent:
         seed: Optional[int] = 17,
     ) -> AgentClaimPayload:
         """Execute agent analysis on df and return structured claim payload."""
-        # 1. Generate code
         generated_code = self._generate_code(prompt, df, seed)
 
-        # 2. Execute code in controlled scope
         local_scope: Dict[str, Any] = {"df": df, "pd": pd, "np": np}
         try:
             exec(generated_code, {"pd": pd, "np": np}, local_scope)
@@ -144,7 +161,6 @@ class MinimalDataScienceAgent:
         except Exception as e:
             res = {"error": f"Execution error: {str(e)}", "claim": f"Analysis execution failed: {str(e)}"}
 
-        # 3. Format structured output
         if isinstance(res, (int, float, np.number)):
             structured_result = {"value": float(res), "claim": str(res)}
         elif isinstance(res, dict):
