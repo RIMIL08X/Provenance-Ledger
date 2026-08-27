@@ -61,9 +61,24 @@ class ClaimReexecutor:
 
     def _execute_code(self, code: str, df: pd.DataFrame) -> Dict[str, Any]:
         """Execute python code snippet in controlled namespace with DataFrame."""
-        local_scope: Dict[str, Any] = {"df": df, "pd": pd}
+        import math
+        import numpy as np
+        import scipy
+        from scipy import stats
+        import sklearn
+
+        env_context = {
+            "df": df,
+            "pd": pd,
+            "np": np,
+            "scipy": scipy,
+            "stats": stats,
+            "sklearn": sklearn,
+            "math": math,
+        }
+        local_scope: Dict[str, Any] = env_context.copy()
         try:
-            exec(code, {"pd": pd}, local_scope)
+            exec(code, env_context, local_scope)
             res = local_scope.get("result")
         except Exception as e:
             res = {"error": f"Re-execution error: {str(e)}", "claim": f"Failed: {str(e)}"}

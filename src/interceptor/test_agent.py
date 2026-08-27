@@ -1,10 +1,14 @@
 """Data science agent implementation with Gemini Cloud LLM integration."""
 
+import math
 import os
 import re
 from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
+import scipy
+from scipy import stats
+import sklearn
 
 from src.interceptor.capture import AgentClaimPayload
 from src.interceptor.gemini_client import GeminiClient
@@ -100,7 +104,6 @@ class MinimalDataScienceAgent:
             total_rows = len(df)
             num_cols = list(df.select_dtypes(include=["number"]).columns)
 
-            # Compact representation for wide datasets
             if total_cols > 50:
                 schema_description = (
                     f"Dataset Shape: {total_rows} rows x {total_cols} columns (Wide Dataset)\n"
@@ -119,6 +122,7 @@ class MinimalDataScienceAgent:
             system_instruction = (
                 "You are an expert, meticulous data science agent.\n"
                 "A pandas DataFrame variable named `df` is ALREADY loaded in memory.\n"
+                "Available packages: pandas (as pd), numpy (as np), scipy, scipy.stats (as stats), sklearn, math.\n"
                 f"{schema_description}\n\n"
                 "RULES:\n"
                 "1. DO NOT recreate, mock, or redefine `df`. Operate directly on `df`.\n"
@@ -154,9 +158,18 @@ class MinimalDataScienceAgent:
         """Execute agent analysis on df and return structured claim payload."""
         generated_code = self._generate_code(prompt, df, seed)
 
-        local_scope: Dict[str, Any] = {"df": df, "pd": pd, "np": np}
+        env_context = {
+            "df": df,
+            "pd": pd,
+            "np": np,
+            "scipy": scipy,
+            "stats": stats,
+            "sklearn": sklearn,
+            "math": math,
+        }
+        local_scope: Dict[str, Any] = env_context.copy()
         try:
-            exec(generated_code, {"pd": pd, "np": np}, local_scope)
+            exec(generated_code, env_context, local_scope)
             res = local_scope.get("result")
         except Exception as e:
             res = {"error": f"Execution error: {str(e)}", "claim": f"Analysis execution failed: {str(e)}"}
