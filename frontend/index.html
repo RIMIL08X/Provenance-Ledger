@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Provenance Ledger — Continuous AI Reproducibility & Provenance Auditing</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              purple: '#8b5cf6',
+              violet: '#7c3aed',
+              cyan: '#06b6d4',
+              blue: '#3b82f6',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'spin-slow': 'spin 8s linear infinite',
+            'glow-pulse': 'glow 2s ease-in-out infinite alternate',
+          },
+          keyframes: {
+            glow: {
+              '0%': { boxShadow: '0 0 15px rgba(139, 92, 246, 0.3)' },
+              '100%': { boxShadow: '0 0 30px rgba(6, 182, 212, 0.5)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18 & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+    body {
+      background-color: #06060c;
+      color: #f1f5f9;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow-x: hidden;
+    }
+    
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Ambient background glows matching NexaAI reference image */
+    .ambient-glow-top {
+      position: fixed;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 450px;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.18) 0%, rgba(59, 130, 246, 0.12) 45%, transparent 70%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .ambient-glow-bottom {
+      position: fixed;
+      bottom: -150px;
+      right: 10%;
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(6, 182, 212, 0.12) 0%, rgba(139, 92, 246, 0.08) 50%, transparent 70%);
+      filter: blur(90px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Nexa Glass Card Style */
+    .nexa-card {
+      background: rgba(14, 14, 24, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: all 0.25s ease;
+    }
+
+    .nexa-card:hover {
+      border-color: rgba(139, 92, 246, 0.25);
+    }
+
+    .nexa-card-glowing {
+      background: rgba(16, 15, 28, 0.85);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      box-shadow: 0 10px 40px rgba(124, 58, 237, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .nexa-input {
+      background: rgba(10, 10, 18, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .nexa-input:focus {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+      outline: none;
+    }
+
+    .nexa-btn-gradient {
+      background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #3b82f6 100%);
+      box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+      transition: all 0.25s ease;
+    }
+
+    .nexa-btn-gradient:hover {
+      background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 50%, #2563eb 100%);
+      box-shadow: 0 6px 25px rgba(124, 58, 237, 0.6);
+      transform: translateY(-1px);
+    }
+
+    .nexa-btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+      transition: all 0.2s ease;
+    }
+
+    .nexa-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .upload-zone-glowing {
+      border: 2px dashed rgba(139, 92, 246, 0.35);
+      background: rgba(15, 14, 26, 0.5);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      transition: all 0.25s ease;
+    }
+
+    .upload-zone-glowing:hover {
+      border-color: #06b6d4;
+      background: rgba(20, 18, 36, 0.7);
+      box-shadow: 0 0 25px rgba(6, 182, 212, 0.15);
+    }
+
+    /* High-tech Radar & Scanning Animations */
+    .radar-scanner {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 2px solid rgba(139, 92, 246, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .radar-scanner::before {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: #06b6d4;
+      animation: spin 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+    }
+
+    .radar-scanner::after {
+      content: '';
+      position: absolute;
+      width: 70%;
+      height: 70%;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-bottom-color: #8b5cf6;
+      animation: spin 0.8s linear infinite reverse;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="min-h-screen relative p-4 md:p-10 flex flex-col items-center justify-start">
+  
+  <!-- Background Glows -->
+  <div class="ambient-glow-top"></div>
+  <div class="ambient-glow-bottom"></div>
+
+  <div id="root" class="w-full max-w-4xl space-y-8 relative z-10"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      const [models, setModels] = useState(["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]);
+      const [selectedModel, setSelectedModel] = useState("gemini-1.5-flash");
+      const [prompt, setPrompt] = useState("Does tenure predict customer churn?");
+      const [seed, setSeed] = useState(17);
+      
+      // Upload & dataset state
+      const [datasetInfo, setDatasetInfo] = useState(null);
+      const [datasetPreview, setDatasetPreview] = useState([]);
+      const [showDataPreview, setShowDataPreview] = useState(false);
+      const [isUploading, setIsUploading] = useState(false);
+      const fileInputRef = useRef(null);
+
+      // Analysis & verification state
+      const [isAnalyzing, setIsAnalyzing] = useState(false);
+      const [isReverifying, setIsReverifying] = useState(false);
+      const [auditStep, setAuditStep] = useState(0);
+      
+      const [currentClaim, setCurrentClaim] = useState(null);
+      const [reverificationResult, setReverificationResult] = useState(null);
+      const [showCode, setShowCode] = useState(false);
+      const [auditMode, setAuditMode] = useState("exact_code_rerun");
+
+      // Audit steps animation text
+      const AUDIT_STEPS = [
+        "🔐 Verifying canonical SHA-256 data snapshot...",
+        "📦 Diffing runtime environment & library hashes...",
+        "⚡ Executing model pipeline in sandboxed scope...",
+        "📊 Computing numerical tolerances & diagnosing drift..."
+      ];
+
+      // Load initial model list & default dataset
+      useEffect(() => {
+        fetch("/api/models")
+          .then(res => res.json())
+          .then(data => {
+            if (data.models && data.models.length > 0) {
+              setModels(data.models);
+              setSelectedModel(data.models[0]);
+            }
+          })
+          .catch(() => {});
+
+        fetch("/api/dataset")
+          .then(res => res.json())
+          .then(data => {
+            setDatasetPreview(data.records || []);
+            setDatasetInfo({
+              filename: "customer_churn.csv (Default Dataset)",
+              total_rows: data.total_rows,
+              columns: data.columns,
+            });
+          })
+          .catch(() => {});
+      }, []);
+
+      // 1. File Upload Handler
+      const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          const res = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          if (data.success) {
+            setDatasetInfo(data.summary);
+            setDatasetPreview(data.summary.sample_records || []);
+            setShowDataPreview(true);
+            const numCols = data.summary.numeric_columns;
+            if (numCols && numCols.length >= 2) {
+              setPrompt(`What is the correlation between ${numCols[0]} and ${numCols[1]}?`);
+            } else if (data.summary.columns.length > 0) {
+              setPrompt(`Summarize key statistics for ${data.summary.columns[0]}`);
+            }
+          }
+        } catch (err) {
+          alert("Error parsing file: " + err.message);
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      // 2. Run analysis
+      const handleRunAnalysis = async () => {
+        setIsAnalyzing(true);
+        setReverificationResult(null);
+        try {
+          const res = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt,
+              model_name: selectedModel,
+              seed: parseInt(seed) || 17,
+              data_hash: datasetInfo?.data_hash || null,
+            })
+          });
+          const data = await res.json();
+          setCurrentClaim(data);
+        } catch (err) {
+          alert("Error executing analysis: " + err.message);
+        } finally {
+          setIsAnalyzing(false);
+        }
+      };
+
+      // 3. High-Tech Multi-Phase Re-verify Handler
+      const handleReverify = async () => {
+        if (!currentClaim) return;
+        setIsReverifying(true);
+        setReverificationResult(null);
+        setAuditStep(0);
+
+        // Step ticker interval
+        const stepInterval = setInterval(() => {
+          setAuditStep(prev => (prev < AUDIT_STEPS.length - 1 ? prev + 1 : prev));
+        }, 500);
+
+        try {
+          const res = await fetch("/api/reverify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              claim_id: currentClaim.claim_id,
+              audit_mode: auditMode,
+            })
+          });
+          const data = await res.json();
+          setTimeout(() => {
+            clearInterval(stepInterval);
+            setReverificationResult(data);
+            setIsReverifying(false);
+          }, 700);
+        } catch (err) {
+          clearInterval(stepInterval);
+          setIsReverifying(false);
+          alert("Error during re-verification: " + err.message);
+        }
+      };
+
+      const getClaimText = () => {
+        if (!currentClaim) return "";
+        const res = currentClaim.original_result;
+        if (res.claim) return res.claim;
+        if (res.r !== undefined) return `Correlation r = ${res.r}`;
+        if (res.value !== undefined) return `Computed value: ${res.value}`;
+        return JSON.stringify(res);
+      };
+
+      const truncateHash = (hash) => {
+        if (!hash || hash.length < 10) return hash || "—";
+        return `${hash.slice(0, 4)}...${hash.slice(-4)}`;
+      };
+
+      return (
+        <div className="space-y-8">
+          
+          {/* Top Holographic Brand Header */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-white/10">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[1px] shadow-[0_0_20px_rgba(139,92,246,0.5)]">
+                <div className="w-full h-full bg-[#0d0c18] rounded-2xl flex items-center justify-center font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-300 text-lg">
+                  PL
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-2xl font-extrabold tracking-tight text-white">Provenance Ledger</h1>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-900/60 text-purple-300 border border-purple-500/40">
+                    2.0 Engine
+                  </span>
+                </div>
+                <div className="text-xs text-zinc-400 font-medium">
+                  Continuous Provenance & Reproducibility Auditing for LLM Agents
+                </div>
+              </div>
+            </div>
+
+            {/* Live System Badges */}
+            <div className="flex items-center space-x-2">
+              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#0e271a]/80 text-emerald-400 border border-emerald-500/30 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>Postgres 16</span>
+              </span>
+              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#1a1236]/80 text-cyan-300 border border-cyan-500/30 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                <span>Gemini Cloud</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Hero Banner Section matching NexaAI Layout */}
+          <div className="relative text-center py-2 space-y-2">
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+              <span className="text-white">AI that verifies </span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-300 to-cyan-300">
+                faster.
+              </span>
+              <br />
+              <span className="text-white">Audits </span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-blue-400 to-purple-400">
+                smarter.
+              </span>
+            </h2>
+            <p className="text-xs md:text-sm text-zinc-400 max-w-lg mx-auto">
+              Drop any dataset or document, ask analytical questions in natural language, and continuously track cryptographic provenance & model drift.
+            </p>
+          </div>
+
+          {/* SECTION 1: DATA CONTEXT INGESTION ZONE */}
+          <div className="nexa-card p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-400">Step 1</span>
+                <span className="text-sm font-semibold text-zinc-200">Data & Document Context</span>
+              </div>
+              {datasetInfo && (
+                <button
+                  onClick={() => setShowDataPreview(!showDataPreview)}
+                  className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
+                >
+                  <span>{showDataPreview ? "Hide Data Table" : `Inspect Data Table (${datasetInfo.total_rows} rows)`}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Glowing Upload Dropzone */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="upload-zone-glowing p-5 cursor-pointer flex items-center justify-between group"
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-xl bg-purple-950/60 border border-purple-500/30 flex items-center justify-center text-xl group-hover:scale-105 transition-transform">
+                  📊
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-zinc-100 group-hover:text-purple-300 transition-colors">
+                    {datasetInfo?.filename || "Upload any dataset or document"}
+                  </div>
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    Supports .csv, .xlsx, .pdf, .docx, .json, .parquet
+                  </div>
+                </div>
+              </div>
+              <button className="px-4 py-2 nexa-btn-secondary rounded-xl text-xs font-semibold text-zinc-200 group-hover:border-purple-500/50">
+                {isUploading ? "Parsing..." : "Browse Files"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.tsv,.xlsx,.xls,.pdf,.docx,.json,.parquet"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </div>
+
+            {/* Collapsible Data Preview */}
+            {showDataPreview && datasetPreview.length > 0 && (
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#090912]/90 p-3 max-h-48 text-xs font-mono">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-white/10 text-purple-300 font-semibold">
+                      {Object.keys(datasetPreview[0]).map(col => (
+                        <th key={col} className="p-2">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datasetPreview.slice(0, 5).map((row, i) => (
+                      <tr key={i} className="border-b border-white/5 text-zinc-300 hover:bg-white/5">
+                        {Object.values(row).map((val, j) => (
+                          <td key={j} className="p-2 truncate max-w-[160px]">{String(val)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 2: ASK THE AGENT */}
+          <div className="nexa-card p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-400">Step 2</span>
+                <span className="text-sm font-semibold text-zinc-200">Natural Language Agent Query</span>
+              </div>
+              <div className="flex items-center space-x-2 text-xs">
+                <span className="text-zinc-400">Model:</span>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="px-2.5 py-1 nexa-input text-xs text-zinc-200 focus:outline-none"
+                >
+                  {models.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Prompt Input Box */}
+            <div className="space-y-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Ask any natural-language analysis question on this data..."
+                  className="w-full px-5 py-4 nexa-input text-zinc-100 text-base focus:outline-none pr-36 font-medium placeholder-zinc-500"
+                />
+                <button
+                  onClick={handleRunAnalysis}
+                  disabled={isAnalyzing}
+                  className="absolute right-2 top-2 bottom-2 px-5 nexa-btn-gradient rounded-lg text-xs font-bold text-white flex items-center space-x-2 shadow-lg disabled:opacity-50"
+                >
+                  <span>{isAnalyzing ? "Executing..." : "Run Analysis ✦"}</span>
+                </button>
+              </div>
+
+              {/* Seed Configuration & Quick Suggestion Chips */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+                <div className="flex items-center space-x-2 text-zinc-400">
+                  <span>Execution Seed:</span>
+                  <input
+                    type="number"
+                    value={seed}
+                    onChange={(e) => setSeed(e.target.value)}
+                    className="w-14 px-2 py-1 nexa-input text-zinc-200 text-center font-mono"
+                  />
+                </div>
+                <div className="flex items-center space-x-1.5 text-zinc-400">
+                  <span>Suggestions:</span>
+                  <button
+                    onClick={() => setPrompt("What is the correlation between tenure and churn?")}
+                    className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/10 text-[11px] text-zinc-300 border border-white/10"
+                  >
+                    Correlation
+                  </button>
+                  <button
+                    onClick={() => setPrompt("Calculate summary statistics and distribution")}
+                    className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/10 text-[11px] text-zinc-300 border border-white/10"
+                  >
+                    Summary Stats
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Agent's Claim Output Card */}
+            {currentClaim && (
+              <div className="mt-6 pt-5 border-t border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-cyan-400">
+                    Agent's Generated Claim
+                  </div>
+                  <span className="text-[11px] font-mono text-zinc-400">
+                    {currentClaim.model_name} • seed {currentClaim.seed}
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-gradient-to-r from-purple-950/40 to-blue-950/40 border border-purple-500/30 text-lg font-bold text-white tracking-tight leading-relaxed shadow-lg">
+                  {getClaimText()}
+                </div>
+
+                {/* Collapsible Python Code Snippet */}
+                <div>
+                  <button
+                    onClick={() => setShowCode(!showCode)}
+                    className="text-xs font-semibold text-zinc-400 hover:text-purple-300 flex items-center space-x-1 transition-colors"
+                  >
+                    <span>{showCode ? "▲ Hide Executable Python Code" : "▼ Inspect Executable Python Code"}</span>
+                  </button>
+                  {showCode && (
+                    <pre className="mt-2 p-4 bg-[#090912] border border-purple-500/20 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto shadow-inner">
+                      {currentClaim.generated_code}
+                    </pre>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 3: RE-VERIFICATION & PROVENANCE AUDITING CARD */}
+          {currentClaim && (
+            <div className="nexa-card nexa-card-glowing p-6 shadow-2xl space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Step 3</span>
+                  <span className="text-sm font-semibold text-zinc-100">Cryptographic Provenance & Audit</span>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-500/40">
+                  Recorded in Postgres
+                </span>
+              </div>
+
+              {/* Cryptographic Hashes Strip */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-[#0a0a14] border border-white/10">
+                  <div className="text-[11px] text-zinc-400 font-medium">Model Provenance</div>
+                  <div className="text-xs font-mono text-zinc-200 mt-1 font-semibold truncate">
+                    {currentClaim.model_name} (s={currentClaim.seed})
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-[#0a0a14] border border-white/10">
+                  <div className="text-[11px] text-zinc-400 font-medium">Data Snapshot Hash</div>
+                  <div className="text-xs font-mono text-cyan-300 mt-1 font-semibold">
+                    {truncateHash(currentClaim.data_snapshot_hash)}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-[#0a0a14] border border-white/10">
+                  <div className="text-[11px] text-zinc-400 font-medium">Environment Hash</div>
+                  <div className="text-xs font-mono text-purple-300 mt-1 font-semibold">
+                    {truncateHash(currentClaim.env_hash)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Audit Experiment Controls */}
+              <div className="pt-2 space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                  Select Audit Experiment:
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <select
+                    value={auditMode}
+                    onChange={(e) => setAuditMode(e.target.value)}
+                    className="w-full sm:w-auto flex-1 px-4 py-3 nexa-input text-xs text-zinc-100 focus:outline-none font-medium cursor-pointer"
+                  >
+                    <optgroup label="Real-World Determinism & Model Tests">
+                      <option value="exact_code_rerun">🎯 [Exact Baseline] Rerun Stored Code on Immutable Data Snapshot</option>
+                      <option value="agent_reinvocation_same_seed">🎲 [Model Jitter] Re-invoke Gemini from Scratch (Same Seed & Prompt)</option>
+                      <option value="cross_model_gemini_2_flash">⚡ [Model Upgrade] Re-verify with Gemini 2.0 Flash</option>
+                      <option value="cross_model_gemini_pro">🧠 [Model Tier] Re-verify with Gemini 1.5 Pro</option>
+                      <option value="batch_consistency_test">📊 [5x Stress Test] 5 Repeated Agent Runs (Compute Reproducibility %)</option>
+                    </optgroup>
+                    <optgroup label="Fault Injection / Drift Attributions">
+                      <option value="simulated_library_drift">📦 [Env Drift] Simulate Library Version Drift (pandas 2.1.0 → 2.2.0)</option>
+                      <option value="simulated_data_drift">📉 [Data Drift] Simulate Data Shift / Anomaly Injection</option>
+                    </optgroup>
+                  </select>
+
+                  <button
+                    onClick={handleReverify}
+                    disabled={isReverifying}
+                    className="px-6 py-3 nexa-btn-gradient rounded-xl text-xs font-bold text-white flex items-center justify-center space-x-2 shrink-0 shadow-lg disabled:opacity-50"
+                  >
+                    <span>{isReverifying ? "Auditing Pipeline..." : "🔄 Re-verify Now"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* High-Tech Futuristic Scanning / Loading State */}
+              {isReverifying && (
+                <div className="p-6 rounded-2xl bg-[#0c0b1a]/95 border border-purple-500/40 shadow-[0_0_30px_rgba(139,92,246,0.3)] space-y-4 animate-pulse">
+                  <div className="flex items-center space-x-4">
+                    <div className="radar-scanner shrink-0">
+                      <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-bold uppercase tracking-wider text-purple-400">
+                        Live Cryptographic Audit in Progress
+                      </div>
+                      <div className="text-sm font-semibold text-zinc-100">
+                        {AUDIT_STEPS[auditStep]}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Glowing Animated Progress Bar */}
+                  <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden border border-white/10">
+                    <div
+                      className="bg-gradient-to-r from-purple-500 via-indigo-400 to-cyan-400 h-full transition-all duration-300 shadow-[0_0_12px_rgba(6,182,212,0.8)]"
+                      style={{ width: `${((auditStep + 1) / AUDIT_STEPS.length) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Multi-Trial Stress Test Breakdown Table */}
+              {reverificationResult?.multi_trial_summary && !isReverifying && (
+                <div className="p-5 rounded-2xl bg-[#090914] border border-purple-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
+                      Multi-Trial Empirical Consistency
+                    </span>
+                    <span className="text-base font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
+                      {Math.round(reverificationResult.multi_trial_summary.reproducibility_score * 100)}% Reproducibility
+                    </span>
+                  </div>
+                  <div className="space-y-2 text-xs font-mono">
+                    {reverificationResult.multi_trial_summary.trials.map((t, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-[#11111e] border border-white/5">
+                        <span className="text-zinc-400 font-semibold">Trial #{t.trial_index}</span>
+                        <span className="truncate max-w-[280px] text-zinc-200">{t.result?.claim || JSON.stringify(t.result)}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${t.matched ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-red-950 text-red-300 border border-red-500/40'}`}>
+                          {t.matched ? 'REPRODUCED' : 'DRIFT'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Final Diagnosis Card (Green Hologram for Match, Red for Drift) */}
+              {reverificationResult && !isReverifying && (
+                <div className="pt-1">
+                  {!reverificationResult.matched ? (
+                    <div className="p-5 rounded-2xl bg-gradient-to-r from-[#240c14] to-[#1a0818] border border-red-500/40 text-red-200 space-y-2 shadow-[0_0_25px_rgba(239,68,68,0.2)]">
+                      <div className="flex items-center space-x-2 font-bold text-sm text-red-400">
+                        <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                        <span>Did Not Reproduce — Root Cause Diagnosed</span>
+                      </div>
+                      <div className="text-xs text-red-200/90 leading-relaxed font-mono">
+                        {reverificationResult.diff_summary}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-5 rounded-2xl bg-gradient-to-r from-[#092416] to-[#06181f] border border-emerald-500/40 text-emerald-200 space-y-2 shadow-[0_0_25px_rgba(16,185,129,0.2)]">
+                      <div className="flex items-center space-x-2 font-bold text-sm text-emerald-400">
+                        <span className="w-3 h-3 rounded-full bg-emerald-400"></span>
+                        <span>Reproduced Successfully — Cryptographically Verified</span>
+                      </div>
+                      <div className="text-xs text-emerald-200/90 leading-relaxed font-mono">
+                        {reverificationResult.diff_summary}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
