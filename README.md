@@ -20,7 +20,34 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Tests](https://img.shields.io/badge/Tests-30%20Passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
 
-[Live Demo](http://localhost:8000) • [The Lore](#-the-lore-the-silent-crisis-of-agentic-data-science) • [Architecture](#-system-architecture) • [Mechanics Deep-Dive](#-mechanics--engine-specification) • [Quickstart](#-quickstart-guide)
+[Live Demo](http://localhost:8000) • [The Lore](#-the-lore-the-silent-crisis-of-agentic-data-science) • [Product Tour](#-product-tour--interface-screenshots) • [Architecture](#-system-architecture) • [Mechanics Deep-Dive](#-mechanics--engine-specification) • [Quickstart](#-quickstart-guide)
+
+</div>
+
+---
+
+## 📸 Product Tour & Interface Screenshots
+
+<div align="center">
+
+### 1. Ingestion & Natural Language Agent Interface
+*Drag-and-drop spreadsheets (`.csv`, `.xlsx`), documents (`.docx`, `.pdf`), inspect schemas, and query in freeform natural language with sub-second Gemini Cloud execution.*
+
+<img src="docs/images/hero_and_ingestion.png" alt="Ingestion & Natural Language Agent" width="900" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
+
+<br/><br/>
+
+### 2. Cryptographic Ledger & Automated Drift Diagnosis
+*Immutable cryptographic hashes (`data_snapshot_hash`, `env_hash`) stored in PostgreSQL 16. If an environment drift occurs (e.g. `pandas 2.1.0` $\rightarrow$ `2.2.0`), the root-cause decision tree isolates the exact package divergence.*
+
+<img src="docs/images/library_drift_diagnosis.png" alt="Cryptographic Ledger & Automated Drift Diagnosis" width="900" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
+
+<br/><br/>
+
+### 3. Multi-Trial Empirical Consistency Stress Testing
+*Runs 5 repeated stochastic agent trials across temperature and seed sweeps to calculate the empirical Reproducibility Score ($\mathcal{R}_{score} = 100\%$) and trial variance breakdown.*
+
+<img src="docs/images/multi_trial_stress_test.png" alt="Multi-Trial Consistency Stress Test" width="900" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
 
 </div>
 
@@ -197,6 +224,8 @@ $$\mathcal{R}_{score} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{I}(\text{Trial}_i \te
 
 ```
 Provenance Ledger
+├── docs/                      # Documentation & Screenshots
+│   └── images/                # High-res UI product tour screenshots
 ├── frontend/                  # React 18 + Tailwind SPA (NexaAI Glassmorphism)
 │   ├── index.html             # Standalone reactive dashboard with dual-ring radar scanner
 │   ├── package.json           # Vite / React packaging configuration
