@@ -19,7 +19,6 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Tests](https://img.shields.io/badge/Tests-30%20Passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
 [Live Demo](http://localhost:8000) • [The Lore](#-the-lore-the-silent-crisis-of-agentic-data-science) • [Architecture](#-system-architecture) • [Mechanics Deep-Dive](#-mechanics--engine-specification) • [Quickstart](#-quickstart-guide)
 
