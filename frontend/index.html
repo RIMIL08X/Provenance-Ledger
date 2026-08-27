@@ -250,16 +250,6 @@
             setDatasetInfo(data.summary);
             setDatasetPreview(data.summary.sample_records || []);
             setShowDataPreview(true);
-            
-            // Dynamic suggestion based on uploaded file columns
-            const numCols = data.summary.numeric_columns;
-            if (numCols && numCols.length >= 2) {
-              setPrompt(`What is the correlation between ${numCols[0]} and ${numCols[1]}?`);
-            } else if (data.summary.columns && data.summary.columns.length > 0) {
-              setPrompt(`Calculate summary statistics for ${data.summary.columns[0]}`);
-            } else {
-              setPrompt("Find the maximum and average value across the dataset");
-            }
           }
         } catch (err) {
           alert("Error parsing file: " + err.message);

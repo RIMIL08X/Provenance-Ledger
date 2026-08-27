@@ -7,14 +7,15 @@ import requests
 
 
 class GeminiClient:
-    """Client for Google Gemini models via official SDK or high-performance REST fallback."""
+    """Client for Google Gemini models with intelligent multi-model fallbacks."""
 
-    DEFAULT_MODEL = "gemini-1.5-flash"
+    DEFAULT_MODEL = "gemini-3.6-flash"
 
     AVAILABLE_MODELS = [
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
+        "gemini-3.6-flash",
+        "gemini-flash-latest",
+        "gemini-2.5-flash-lite",
+        "gemini-pro-latest",
     ]
 
     def __init__(self, api_key: Optional[str] = None) -> None:
@@ -32,60 +33,41 @@ class GeminiClient:
         temperature: float = 0.0,
         seed: Optional[int] = None,
     ) -> str:
-        """Generate response from Gemini model."""
+        """Generate response from Gemini model with multi-model fallback chain."""
         if not self.is_available():
             raise RuntimeError("GEMINI_API_KEY is not configured in .env")
 
-        target_model = model or self.DEFAULT_MODEL
-        # Normalize model string
-        if not target_model.startswith("gemini-"):
-            target_model = "gemini-1.5-flash"
+        candidate_models = []
+        if model and model in self.AVAILABLE_MODELS:
+            candidate_models.append(model)
+        for m in self.AVAILABLE_MODELS:
+            if m not in candidate_models:
+                candidate_models.append(m)
 
-        # Try google.genai SDK first
-        try:
-            from google import genai
-            from google.genai import types
+        from google import genai
+        from google.genai import types
 
-            client = genai.Client(api_key=self.api_key)
-            config = types.GenerateContentConfig(
-                temperature=temperature,
-                seed=seed,
-                system_instruction=system_instruction,
-            )
-            response = client.models.generate_content(
-                model=target_model,
-                contents=prompt,
-                config=config,
-            )
-            if response.text:
-                return response.text.strip()
-        except Exception:
-            pass
+        client = genai.Client(api_key=self.api_key)
 
-        # High-performance Direct REST API Fallback
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={self.api_key}"
-        headers = {"Content-Type": "application/json"}
-        
-        contents = [{"parts": [{"text": prompt}]}]
-        body: Dict[str, Any] = {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": temperature,
-            }
-        }
-        if seed is not None:
-            body["generationConfig"]["seed"] = seed
-        if system_instruction:
-            body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+        last_err = None
+        for candidate in candidate_models:
+            try:
+                config = types.GenerateContentConfig(
+                    temperature=temperature,
+                    seed=seed,
+                    system_instruction=system_instruction,
+                )
+                response = client.models.generate_content(
+                    model=candidate,
+                    contents=prompt,
+                    config=config,
+                )
+                if response and response.text:
+                    return response.text.strip()
+            except Exception as e:
+                last_err = e
+                continue
 
-        resp = requests.post(url, headers=headers, json=body, timeout=30)
-        if resp.status_code == 200:
-            data = resp.json()
-            candidates = data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if parts:
-                    return parts[0].get("text", "").strip()
-            return ""
-        else:
-            raise RuntimeError(f"Gemini API error ({resp.status_code}): {resp.text}")
+        if last_err:
+            raise RuntimeError(f"Gemini API failure across models: {str(last_err)}")
+        return ""

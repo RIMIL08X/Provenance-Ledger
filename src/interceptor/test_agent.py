@@ -15,8 +15,8 @@ class MinimalDataScienceAgent:
 
     def __init__(
         self,
-        model_name: str = "gemini-1.5-flash",
-        model_version: str = "1.5",
+        model_name: str = "gemini-3.6-flash",
+        model_version: str = "3.6",
         gemini_client: Optional[GeminiClient] = None,
     ) -> None:
         self.model_name = model_name

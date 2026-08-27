@@ -48,7 +48,7 @@ ACTIVE_DATASETS: Dict[str, pd.DataFrame] = {}
 
 class AnalyzeRequest(BaseModel):
     prompt: str
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-3.6-flash"
     seed: int = 17
     data_hash: str
 
