@@ -1,10 +1,11 @@
-"""Ultra-resilient multi-format data parser supporting large, wide, and varied-encoding files."""
+"""Ultra-resilient multi-format data parser supporting large, wide, NaN-containing, and varied-encoding files."""
 
 import io
 import json
 import os
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
+import numpy as np
 import pandas as pd
 from pypdf import PdfReader
 from docx import Document
@@ -28,6 +29,29 @@ def _deduplicate_columns(columns: List[Any]) -> List[str]:
             seen[col_str] = 0
             unique_cols.append(col_str)
     return unique_cols
+
+
+def _sanitize_for_json(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Convert DataFrame rows to 100% JSON-compliant dictionaries, safely stripping NaNs and Infs."""
+    records = []
+    for row in df.itertuples(index=False):
+        row_dict = {}
+        for col_name, val in zip(df.columns, row):
+            if pd.isna(val) or val is None or str(val).lower() in ("nan", "none", "nat"):
+                row_dict[str(col_name)] = None
+            elif isinstance(val, (float, np.floating)):
+                if np.isnan(val) or np.isinf(val):
+                    row_dict[str(col_name)] = None
+                else:
+                    row_dict[str(col_name)] = float(val)
+            elif isinstance(val, (int, np.integer)):
+                row_dict[str(col_name)] = int(val)
+            elif isinstance(val, bool):
+                row_dict[str(col_name)] = bool(val)
+            else:
+                row_dict[str(col_name)] = str(val)
+        records.append(row_dict)
+    return records
 
 
 class DataIngestionEngine:
@@ -138,7 +162,6 @@ class DataIngestionEngine:
         try:
             data_hash = compute_data_snapshot_hash(df)
         except Exception:
-            # Fallback simple sha256
             import hashlib
             data_hash = hashlib.sha256(file_bytes).hexdigest()
 
@@ -149,7 +172,7 @@ class DataIngestionEngine:
         except Exception:
             df.to_csv(os.path.join(SNAPSHOT_DIR, f"{data_hash}.csv"), index=False)
 
-        # Build token-safe and DOM-safe preview summary
+        # Build token-safe, DOM-safe, and NaN-safe preview summary
         total_cols = len(df.columns)
         total_rows = len(df)
         num_cols = list(df.select_dtypes(include=["number"]).columns)
@@ -157,7 +180,7 @@ class DataIngestionEngine:
         preview_col_limit = min(20, total_cols)
         preview_df = df.iloc[:10, :preview_col_limit]
 
-        # Extract dtypes safely by position (never crashes on duplicate column names)
+        # Extract dtypes safely by position
         safe_dtypes = {str(preview_df.columns[i]): str(preview_df.dtypes.iloc[i]) for i in range(preview_col_limit)}
 
         summary = {
@@ -171,7 +194,7 @@ class DataIngestionEngine:
             "dtypes": safe_dtypes,
             "numeric_columns": num_cols[:15],
             "numeric_column_count": len(num_cols),
-            "sample_records": preview_df.to_dict(orient="records"),
+            "sample_records": _sanitize_for_json(preview_df),
         }
 
         return df, summary, data_hash

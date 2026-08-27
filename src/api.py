@@ -100,9 +100,11 @@ def get_dataset(data_hash: Optional[str] = None):
         if df is None:
             raise HTTPException(status_code=404, detail="Dataset snapshot not found")
 
+    from src.parser.data_parser import _sanitize_for_json
+    preview_df = df.iloc[:15, :min(20, len(df.columns))]
     return {
-        "columns": list(df.columns),
-        "records": df.head(15).to_dict(orient="records"),
+        "columns": list(preview_df.columns),
+        "records": _sanitize_for_json(preview_df),
         "total_rows": len(df),
     }
 
