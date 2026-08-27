@@ -22,7 +22,7 @@ def test_get_models_endpoint(client):
     assert res.status_code == 200
     data = res.json()
     assert "models" in data
-    assert "gemini-1.5-flash" in data["models"]
+    assert "gemini-3.6-flash" in data["models"]
 
 
 def test_upload_file_endpoint(client):

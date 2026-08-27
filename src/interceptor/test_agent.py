@@ -47,55 +47,95 @@ class MinimalDataScienceAgent:
             cleaned_lines.append(line)
         return "\n".join(cleaned_lines).strip()
 
-    def _generate_code_mock(self, prompt: str, df: pd.DataFrame) -> str:
-        """Generic fallback code generator when offline, matching actual dataset columns."""
+    def _find_matching_columns(self, prompt: str, df: pd.DataFrame) -> List[str]:
+        """Find columns from df mentioned in prompt."""
         prompt_lower = prompt.lower()
-        cols = list(df.columns)
-        num_cols = list(df.select_dtypes(include=["number"]).columns)
+        matched = []
+        # Sort by length descending to match full names first
+        for col in sorted(df.columns, key=lambda x: len(str(x)), reverse=True):
+            col_name = str(col).strip()
+            if col_name and col_name.lower() in prompt_lower:
+                if col_name not in matched:
+                    matched.append(col_name)
+        return matched
 
-        if len(num_cols) >= 2 and any(w in prompt_lower for w in ["corr", "predict", "relationship", "versus", "vs", "churn", "tenure"]):
-            c1, c2 = num_cols[0], num_cols[1]
-            return (
-                f"corr = float(df['{c1}'].corr(df['{c2}']))\n"
-                f"result = {{'r': round(corr, 2), 'claim': f'Correlation between {c1} and {c2} is {{round(corr, 2)}}'}}"
-            )
-        elif any(w in prompt_lower for w in ["mean", "avg", "average"]):
-            target = next((c for c in cols if c.lower() in prompt_lower), num_cols[0] if num_cols else cols[0])
-            return (
-                f"val = float(df['{target}'].mean())\n"
-                f"result = {{'value': round(val, 2), 'claim': f'The average {target} is {{round(val, 2)}}'}}"
-            )
-        elif any(w in prompt_lower for w in ["max", "highest", "maximum"]):
-            if len(cols) > 50 and any(w in prompt_lower for w in ["all", "overall", "across"]):
+    def _generate_code_mock(self, prompt: str, df: pd.DataFrame) -> str:
+        """Intelligent fallback code generator targeting the exact columns requested in the prompt."""
+        prompt_lower = prompt.lower()
+        matched_cols = self._find_matching_columns(prompt, df)
+        num_cols = list(df.select_dtypes(include=["number"]).columns)
+        all_cols = list(df.columns)
+
+        # Correlation or relationship requested
+        if any(w in prompt_lower for w in ["corr", "predict", "relationship", "versus", "vs", "associated"]):
+            if len(matched_cols) >= 2:
+                c1, c2 = matched_cols[0], matched_cols[1]
+            elif len(matched_cols) == 1 and num_cols:
+                c1 = matched_cols[0]
+                c2 = next((c for c in num_cols if c != c1), all_cols[0])
+            elif len(num_cols) >= 2:
+                c1, c2 = num_cols[0], num_cols[1]
+            else:
+                c1, c2 = all_cols[0], (all_cols[1] if len(all_cols) > 1 else all_cols[0])
+
+            # Check if columns are numeric or categorical
+            is_c1_num = pd.api.types.is_numeric_dtype(df[c1])
+            is_c2_num = pd.api.types.is_numeric_dtype(df[c2])
+
+            if is_c1_num and is_c2_num:
                 return (
-                    "val = float(df.select_dtypes(include=['number']).max().max())\n"
-                    "result = {'value': round(val, 2), 'claim': f'The maximum value across all columns is {round(val, 2)}'}"
+                    f"corr = float(df['{c1}'].corr(df['{c2}']))\n"
+                    f"result = {{'r': round(corr, 2), 'claim': f'Correlation between {c1} and {c2} is {{round(corr, 2)}}'}}"
                 )
-            target = next((c for c in cols if c.lower() in prompt_lower), num_cols[0] if num_cols else cols[0])
-            return (
-                f"val = float(df['{target}'].max())\n"
-                f"result = {{'value': round(val, 2), 'claim': f'The maximum {target} is {{round(val, 2)}}'}}"
-            )
-        elif any(w in prompt_lower for w in ["min", "lowest", "minimum"]):
-            target = next((c for c in cols if c.lower() in prompt_lower), num_cols[0] if num_cols else cols[0])
-            return (
-                f"val = float(df['{target}'].min())\n"
-                f"result = {{'value': round(val, 2), 'claim': f'The minimum {target} is {{round(val, 2)}}'}}"
-            )
-        elif any(w in prompt_lower for w in ["sum", "total"]):
-            target = next((c for c in cols if c.lower() in prompt_lower), num_cols[0] if num_cols else cols[0])
-            return (
-                f"val = float(df['{target}'].sum())\n"
-                f"result = {{'value': round(val, 2), 'claim': f'The total {target} is {{round(val, 2)}}'}}"
-            )
+            else:
+                return (
+                    f"s1, _ = pd.factorize(df['{c1}'])\n"
+                    f"s2, _ = pd.factorize(df['{c2}'])\n"
+                    f"corr = float(pd.Series(s1).corr(pd.Series(s2)))\n"
+                    f"result = {{'r': round(corr, 2), 'claim': f'Factorized correlation between categorical columns {c1} and {c2} is {{round(corr, 2)}}'}}"
+                )
+
+        elif any(w in prompt_lower for w in ["mean", "avg", "average"]):
+            target = matched_cols[0] if matched_cols else (num_cols[0] if num_cols else all_cols[0])
+            if pd.api.types.is_numeric_dtype(df[target]):
+                return (
+                    f"val = float(df['{target}'].mean())\n"
+                    f"result = {{'value': round(val, 2), 'claim': f'The average {target} is {{round(val, 2)}}'}}"
+                )
+            else:
+                return (
+                    f"top_val = df['{target}'].mode().iloc[0] if not df['{target}'].empty else 'N/A'\n"
+                    f"result = {{'value': str(top_val), 'claim': f'Most common value in {target} is {{top_val}}'}}"
+                )
+
+        elif any(w in prompt_lower for w in ["max", "highest", "maximum"]):
+            target = matched_cols[0] if matched_cols else (num_cols[0] if num_cols else all_cols[0])
+            if pd.api.types.is_numeric_dtype(df[target]):
+                return (
+                    f"val = float(df['{target}'].max())\n"
+                    f"result = {{'value': round(val, 2), 'claim': f'The maximum {target} is {{round(val, 2)}}'}}"
+                )
+            else:
+                return (
+                    f"val = df['{target}'].dropna().astype(str).max()\n"
+                    f"result = {{'value': str(val), 'claim': f'Maximum entry in {target} is {{val}}'}}"
+                )
+
         elif any(w in prompt_lower for w in ["count", "rows", "size", "length"]):
             return f"cnt = int(len(df))\ncols = int(len(df.columns))\nresult = {{'rows': cnt, 'columns': cols, 'claim': f'Dataset contains {{cnt}} rows and {{cols}} columns'}}"
+
         else:
-            first_col = num_cols[0] if num_cols else cols[0]
-            return (
-                f"val = float(df['{first_col}'].mean())\n"
-                f"result = {{'value': round(val, 2), 'claim': f'Calculated mean for {first_col}: {{round(val, 2)}}'}}"
-            )
+            target = matched_cols[0] if matched_cols else (num_cols[0] if num_cols else all_cols[0])
+            if pd.api.types.is_numeric_dtype(df[target]):
+                return (
+                    f"val = float(df['{target}'].mean())\n"
+                    f"result = {{'value': round(val, 2), 'claim': f'Calculated mean for {target}: {{round(val, 2)}}'}}"
+                )
+            else:
+                return (
+                    f"cnt = int(df['{target}'].nunique())\n"
+                    f"result = {{'unique_count': cnt, 'claim': f'Column {target} contains {{cnt}} unique categories'}}"
+                )
 
     def _generate_code(self, prompt: str, df: pd.DataFrame, seed: Optional[int]) -> str:
         """Generate analysis code from Gemini or fallback with token-safe schema formatting."""
@@ -107,9 +147,9 @@ class MinimalDataScienceAgent:
             if total_cols > 50:
                 schema_description = (
                     f"Dataset Shape: {total_rows} rows x {total_cols} columns (Wide Dataset)\n"
-                    f"Sample Column Names (first 25): {list(df.columns[:25])}\n"
+                    f"All Column Names (sample): {list(df.columns[:50])}\n"
                     f"Total Numeric Columns: {len(num_cols)}\n"
-                    f"Data Preview (first 3 rows across first 10 columns):\n{df.iloc[:3, :min(10, total_cols)].to_string()}"
+                    f"Data Preview (first 3 rows):\n{df.iloc[:3, :min(15, total_cols)].to_string()}"
                 )
             else:
                 schema_info = {str(col): str(dtype) for col, dtype in df.dtypes.items()}
@@ -124,13 +164,15 @@ class MinimalDataScienceAgent:
                 "A pandas DataFrame variable named `df` is ALREADY loaded in memory.\n"
                 "Available packages: pandas (as pd), numpy (as np), scipy, scipy.stats (as stats), sklearn, math.\n"
                 f"{schema_description}\n\n"
-                "RULES:\n"
-                "1. DO NOT recreate, mock, or redefine `df`. Operate directly on `df`.\n"
-                "2. Write Python code to compute the exact answer to the user's question.\n"
-                "3. You MUST assign the final structured dictionary to the variable `result`.\n"
-                "4. `result` MUST have a 'claim' key with a concise, clear natural-language summary.\n"
-                "5. `result` SHOULD also include relevant numeric keys (e.g. 'r', 'value', 'mean', 'max', 'count').\n"
-                "6. Wrap ONLY executable Python code in ```python ``` fences."
+                "CRITICAL INSTRUCTIONS:\n"
+                "1. ALWAYS analyze the EXACT columns requested in the user's prompt (e.g. If the prompt mentions 'Activity' and 'Location', analyze `df['Activity']` and `df['Location']`).\n"
+                "2. If the user asks for correlation between categorical / string columns, compute factorized Pearson correlation (`pd.factorize()`) or Cramér's V / contingency Chi-squared.\n"
+                "3. DO NOT recreate or redefine `df`. Operate directly on `df`.\n"
+                "4. Write Python code to compute the exact answer to the user's question.\n"
+                "5. You MUST assign the final structured dictionary to the variable `result`.\n"
+                "6. `result` MUST have a 'claim' key with a concise, clear natural-language summary answering the user's question.\n"
+                "7. `result` SHOULD also include relevant numeric keys (e.g. 'r', 'value', 'mean', 'max', 'count').\n"
+                "8. Wrap ONLY executable Python code in ```python ``` fences."
             )
 
             try:
@@ -144,8 +186,10 @@ class MinimalDataScienceAgent:
                 code = self._extract_code(raw_output)
                 if code and "result" in code:
                     return code
-            except Exception:
-                pass
+            except Exception as e:
+                import traceback
+                print(f"[Gemini Agent Error] {e}")
+                traceback.print_exc()
 
         return self._generate_code_mock(prompt, df)
 
