@@ -291,14 +291,4 @@ make test
 | `/api/reverify` | `POST` | Runs re-verification under the chosen audit experiment (exact baseline, model jitter, model version upgrade, 5x stress test, or simulated drift). |
 | `/api/claims` | `GET` | Lists all historical recorded claims, execution timestamps, and audit statuses. |
 
----
 
-## 🛡️ License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-  <sub>Built with precision for trustworthy, auditable, and reproducible AI systems.</sub>
-</div>
