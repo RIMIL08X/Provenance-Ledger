@@ -1,4 +1,4 @@
-"""Database connection and session management supporting PostgreSQL and auto-falling back to SQLite for zero-config deployments."""
+"""Database connection and session management strictly for PostgreSQL."""
 
 import os
 from contextlib import contextmanager
@@ -16,8 +16,9 @@ DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/pr
 
 
 def get_database_url() -> str:
-    """Get database URL from environment or return default."""
+    """Get PostgreSQL database URL from environment or return default."""
     url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    # Ensure postgresql scheme with psycopg
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     elif url.startswith("postgres://"):
@@ -26,18 +27,9 @@ def get_database_url() -> str:
 
 
 def get_engine(url: str | None = None) -> Engine:
-    """Create SQLAlchemy engine with automatic fallback for zero-config deployments."""
+    """Create SQLAlchemy engine for PostgreSQL."""
     db_url = url or get_database_url()
-    try:
-        engine = create_engine(db_url, echo=False, pool_pre_ping=True)
-        # Test connection
-        with engine.connect() as conn:
-            pass
-        return engine
-    except Exception:
-        # Fallback to zero-config SQLite for single-shot cloud deployment (e.g. Hugging Face Spaces)
-        fallback_url = "sqlite:///provenance_ledger.db"
-        return create_engine(fallback_url, echo=False)
+    return create_engine(db_url, echo=False, pool_pre_ping=True)
 
 
 def get_session_factory(engine: Engine | None = None) -> sessionmaker[Session]:
@@ -62,6 +54,6 @@ def get_session(engine: Engine | None = None) -> Generator[Session, None, None]:
 
 
 def init_db(engine: Engine | None = None) -> None:
-    """Create all tables in the active database."""
+    """Create all tables in PostgreSQL."""
     eng = engine or get_engine()
     Base.metadata.create_all(bind=eng)
