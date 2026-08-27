@@ -188,18 +188,39 @@ def reverify_claim(req: ReverifyRequest):
         elif req.audit_mode == "agent_reinvocation_same_seed":
             exec_mode = "agent_reinvocation"
 
-        elif req.audit_mode == "cross_model_gemini_2_flash":
+        elif req.audit_mode == "cross_model_gemini_flash_lite":
             exec_mode = "agent_reinvocation"
-            target_model = "gemini-2.0-flash"
+            target_model = "gemini-2.5-flash-lite"
 
         elif req.audit_mode == "cross_model_gemini_pro":
             exec_mode = "agent_reinvocation"
-            target_model = "gemini-1.5-pro"
+            target_model = "gemini-pro-latest"
 
         elif req.audit_mode == "batch_consistency_test":
             exec_mode = "stress_test"
             num_trials = 5
             temperature = 0.2
+
+        elif req.audit_mode == "stochastic_temperature_sweep":
+            exec_mode = "stress_test"
+            num_trials = 4
+            temperature = 0.7
+
+        elif req.audit_mode == "bootstrap_subsample_robustness":
+            if len(target_df) >= 4:
+                target_df = target_df.sample(frac=0.8, random_state=42).reset_index(drop=True)
+            exec_mode = "code_rerun"
+
+        elif req.audit_mode == "floating_point_perturbation":
+            import numpy as np
+            num_cols = list(target_df.select_dtypes(include=["number"]).columns)
+            for col in num_cols:
+                target_df[col] = target_df[col].astype(float) + np.random.normal(0, 1e-6, size=len(target_df))
+            exec_mode = "code_rerun"
+
+        elif req.audit_mode == "column_order_invariance":
+            target_df = target_df[list(reversed(target_df.columns))]
+            exec_mode = "code_rerun"
 
         elif req.audit_mode == "simulated_library_drift":
             orig_env = {"pandas": "2.1.0", "numpy": "1.26.4", "scikit-learn": "1.4.0"}

@@ -84,7 +84,23 @@ def test_analyze_and_rich_audit_modes(client):
     assert "multi_trial_summary" in stress_data
     assert stress_data["multi_trial_summary"]["total_trials"] == 5
 
-    # 5. Simulated Library Drift
+    # 5. Column Order Invariance
+    reverify_col_order = client.post(
+        "/api/reverify",
+        json={"claim_id": claim_id, "audit_mode": "column_order_invariance"},
+    )
+    assert reverify_col_order.status_code == 200
+    assert reverify_col_order.json()["matched"] is True
+
+    # 6. Thermal Temperature Sweep
+    reverify_temp = client.post(
+        "/api/reverify",
+        json={"claim_id": claim_id, "audit_mode": "stochastic_temperature_sweep"},
+    )
+    assert reverify_temp.status_code == 200
+    assert reverify_temp.json()["multi_trial_summary"]["total_trials"] == 4
+
+    # 7. Simulated Library Drift
     reverify_lib_drift = client.post(
         "/api/reverify",
         json={"claim_id": claim_id, "audit_mode": "simulated_library_drift"},

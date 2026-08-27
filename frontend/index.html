@@ -632,10 +632,16 @@
                   >
                     <optgroup label="Real-World Determinism & Model Tests">
                       <option value="exact_code_rerun">🎯 [Exact Baseline] Rerun Stored Code on Immutable Data Snapshot</option>
+                      <option value="column_order_invariance">🔄 [Canonical Invariance] Shuffle Column Order (Verify Order-Invariance)</option>
                       <option value="agent_reinvocation_same_seed">🎲 [Model Jitter] Re-invoke Gemini from Scratch (Same Seed & Prompt)</option>
-                      <option value="cross_model_gemini_2_flash">⚡ [Model Upgrade] Re-verify with Gemini 2.0 Flash</option>
-                      <option value="cross_model_gemini_pro">🧠 [Model Tier] Re-verify with Gemini 1.5 Pro</option>
+                      <option value="cross_model_gemini_flash_lite">⚡ [Model Tier Shift] Re-verify with Gemini Flash Lite</option>
+                      <option value="cross_model_gemini_pro">🧠 [Model Scale Shift] Re-verify with Gemini Pro Latest</option>
+                    </optgroup>
+                    <optgroup label="Stochastic & Robustness Stress Tests">
                       <option value="batch_consistency_test">📊 [5x Stress Test] 5 Repeated Agent Runs (Compute Reproducibility %)</option>
+                      <option value="stochastic_temperature_sweep">🌡️ [Thermal Sensitivity] High Temperature Sweep (T=0.7 Stress Test)</option>
+                      <option value="bootstrap_subsample_robustness">🎲 [Bootstrap Subsampling] 80% Random Data Resampling Test</option>
+                      <option value="floating_point_perturbation">🔬 [Numerical Noise] Injects ε = 10⁻⁶ Precision Jitter</option>
                     </optgroup>
                     <optgroup label="Fault Injection / Drift Attributions">
                       <option value="simulated_library_drift">📦 [Env Drift] Simulate Library Version Drift (pandas 2.1.0 → 2.2.0)</option>
