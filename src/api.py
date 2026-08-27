@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager
 import os
 import sys
 from typing import Any, Dict, List, Optional
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -18,11 +19,30 @@ from src.interceptor.capture import provenance_intercept
 from src.interceptor.gemini_client import GeminiClient
 from src.interceptor.hashing import compute_env_hash
 from src.interceptor.test_agent import MinimalDataScienceAgent
-from src.parser.data_parser import DataIngestionEngine
+from src.parser.data_parser import DataIngestionEngine, _sanitize_for_json
 from src.reexecutor.reexecutor import ClaimReexecutor, ReexecutionReport
 from src.store.database import get_database_url, get_engine, get_session, init_db
 from src.store.models import EnvironmentSnapshot
 from src.store.repository import ProvenanceStore
+
+
+def sanitize_value(val: Any) -> Any:
+    """Recursively sanitize data structures for 100% JSON compliance (replacing NaN/Inf with None)."""
+    if val is None:
+        return None
+    if isinstance(val, (float, np.floating)):
+        if np.isnan(val) or np.isinf(val):
+            return None
+        return float(val)
+    if isinstance(val, (int, np.integer)):
+        return int(val)
+    if isinstance(val, (bool, np.bool_)):
+        return bool(val)
+    if isinstance(val, dict):
+        return {str(k): sanitize_value(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple, set)):
+        return [sanitize_value(v) for v in val]
+    return val
 
 
 @asynccontextmanager
@@ -62,11 +82,11 @@ class ReverifyRequest(BaseModel):
 def get_available_models():
     """List available Gemini Cloud models and check API key status."""
     client = GeminiClient()
-    return {
+    return sanitize_value({
         "models": client.AVAILABLE_MODELS,
         "active_provider": "Google Gemini",
         "is_configured": client.is_available(),
-    }
+    })
 
 
 @app.post("/api/upload")
@@ -76,11 +96,11 @@ async def upload_file(file: UploadFile = File(...)):
         content = await file.read()
         df, summary, data_hash = DataIngestionEngine.parse_file(content, file.filename)
         ACTIVE_DATASETS[data_hash] = df
-        return {
+        return sanitize_value({
             "success": True,
             "data_hash": data_hash,
             "summary": summary,
-        }
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -100,13 +120,12 @@ def get_dataset(data_hash: Optional[str] = None):
         if df is None:
             raise HTTPException(status_code=404, detail="Dataset snapshot not found")
 
-    from src.parser.data_parser import _sanitize_for_json
     preview_df = df.iloc[:15, :min(20, len(df.columns))]
-    return {
+    return sanitize_value({
         "columns": list(preview_df.columns),
         "records": _sanitize_for_json(preview_df),
         "total_rows": len(df),
-    }
+    })
 
 
 @app.post("/api/analyze")
@@ -127,7 +146,7 @@ def run_analysis(req: AnalyzeRequest):
 
     agent = MinimalDataScienceAgent(
         model_name=req.model_name,
-        model_version="1.5",
+        model_version="3.6",
     )
 
     with get_session() as session:
@@ -144,7 +163,7 @@ def run_analysis(req: AnalyzeRequest):
         if not claim:
             raise HTTPException(status_code=500, detail="Failed to persist claim in database")
 
-        return {
+        return sanitize_value({
             "claim_id": str(claim.claim_id),
             "prompt": claim.prompt,
             "model_name": claim.model_name,
@@ -155,7 +174,7 @@ def run_analysis(req: AnalyzeRequest):
             "env_hash": claim.env_hash,
             "status": claim.status,
             "created_at": claim.created_at.isoformat(),
-        }
+        })
 
 
 def _setup_env_drift(claim, session, orig_env, target_df):
@@ -236,7 +255,6 @@ def reverify_claim(req: ReverifyRequest):
             exec_mode = "code_rerun"
 
         elif req.audit_mode == "floating_point_perturbation":
-            import numpy as np
             num_cols = list(target_df.select_dtypes(include=["number"]).columns)
             for col in num_cols:
                 target_df[col] = target_df[col].astype(float) + np.random.normal(0, 1e-6, size=len(target_df))
@@ -289,7 +307,7 @@ def reverify_claim(req: ReverifyRequest):
                 num_trials=num_trials,
                 override_env_packages=override_env_packages,
             )
-            return {
+            return sanitize_value({
                 "claim_id": report.claim_id,
                 "matched": report.matched,
                 "status": report.status,
@@ -299,8 +317,10 @@ def reverify_claim(req: ReverifyRequest):
                 "diagnosis": report.diagnosis.model_dump() if report.diagnosis else None,
                 "multi_trial_summary": report.multi_trial_summary.model_dump() if report.multi_trial_summary else None,
                 "executed_at": report.executed_at.isoformat(),
-            }
+            })
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Re-verification error: {str(e)}")
 
 
@@ -310,7 +330,7 @@ def list_claims():
     with get_session() as session:
         store = ProvenanceStore(session)
         claims = store.list_claims(limit=50)
-        return {
+        return sanitize_value({
             "claims": [
                 {
                     "claim_id": str(c.claim_id),
@@ -325,7 +345,7 @@ def list_claims():
                 }
                 for c in claims
             ]
-        }
+        })
 
 
 # Serve React Single-Page Application

@@ -1,4 +1,4 @@
-"""Google Gemini Cloud API Client for ultra-fast data science agent reasoning."""
+"""Google Gemini Cloud API Client with rate-limit resiliency and smart model fallbacks."""
 
 import os
 import re
@@ -66,6 +66,7 @@ class GeminiClient:
                     return response.text.strip()
             except Exception as e:
                 last_err = e
+                # Continue down fallback chain on 429, 404, or 503
                 continue
 
         if last_err:

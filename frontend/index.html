@@ -282,7 +282,9 @@
               data_hash: datasetInfo.data_hash,
             })
           });
-          const data = await res.json();
+          const text = await res.text();
+          let data;
+          try { data = JSON.parse(text); } catch { throw new Error(text || "Analysis failed"); }
           if (!res.ok) throw new Error(data.detail || "Analysis failed");
           setCurrentClaim(data);
         } catch (err) {
@@ -312,7 +314,11 @@
               audit_mode: auditMode,
             })
           });
-          const data = await res.json();
+          const text = await res.text();
+          let data;
+          try { data = JSON.parse(text); } catch { throw new Error(text || "Re-verification failed"); }
+          if (!res.ok) throw new Error(data.detail || "Re-verification failed");
+
           setTimeout(() => {
             clearInterval(stepInterval);
             setReverificationResult(data);
