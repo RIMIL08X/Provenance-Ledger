@@ -643,8 +643,14 @@
                       <option value="bootstrap_subsample_robustness">🎲 [Bootstrap Subsampling] 80% Random Data Resampling Test</option>
                       <option value="floating_point_perturbation">🔬 [Numerical Noise] Injects ε = 10⁻⁶ Precision Jitter</option>
                     </optgroup>
-                    <optgroup label="Fault Injection / Drift Attributions">
-                      <option value="simulated_library_drift">📦 [Env Drift] Simulate Library Version Drift (pandas 2.1.0 → 2.2.0)</option>
+                    <optgroup label="📦 Library & Environment Drift Audits">
+                      <option value="env_drift_pandas_upgrade">📦 [Pandas Drift] pandas 2.1.0 → 2.2.2 (Method & Interpolation Shift)</option>
+                      <option value="env_drift_numpy_2_upgrade">🔢 [NumPy 2.0 ABI Drift] numpy 1.26.4 → 2.1.0 (Type Promotion & Precision Shift)</option>
+                      <option value="env_drift_scipy_stats_upgrade">🔬 [SciPy Stats Drift] scipy 1.11.4 → 1.14.0 (Optimization Tolerance Shift)</option>
+                      <option value="env_drift_sklearn_upgrade">🤖 [Scikit-Learn Drift] scikit-learn 1.3.2 → 1.5.1 (Solver & Regularizer Shift)</option>
+                      <option value="env_drift_multi_dependency">⚡ [Cascading Multi-Dep Drift] Full Stack Upgrade (pandas, numpy, scipy, sklearn)</option>
+                    </optgroup>
+                    <optgroup label="📉 Data Mutation & Anomaly Injections">
                       <option value="simulated_data_drift">📉 [Data Drift] Simulate Data Shift / Anomaly Injection</option>
                     </optgroup>
                   </select>

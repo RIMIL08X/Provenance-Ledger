@@ -158,6 +158,30 @@ def run_analysis(req: AnalyzeRequest):
         }
 
 
+def _setup_env_drift(claim, session, orig_env, target_df):
+    """Register simulated historical environment and perturb dataset slightly to provoke drift."""
+    orig_hash, _ = compute_env_hash(orig_env)
+    claim.env_hash = orig_hash
+    snap = session.get(EnvironmentSnapshot, orig_hash)
+    if not snap:
+        snap = EnvironmentSnapshot(
+            env_hash=orig_hash,
+            captured_at=claim.created_at,
+            library_versions=orig_env,
+        )
+        session.add(snap)
+    session.commit()
+
+    num_cols = list(target_df.select_dtypes(include=["number"]).columns)
+    for col in num_cols:
+        target_df[col] = target_df[col].astype(float)
+
+    if num_cols:
+        target_df[num_cols[0]] = target_df[num_cols[0]].iloc[::-1].values
+        if len(num_cols) > 1:
+            target_df.loc[0, num_cols[1]] = float(target_df[num_cols[1]].max() * 3.5 + 20.0)
+
+
 @app.post("/api/reverify")
 def reverify_claim(req: ReverifyRequest):
     """Re-verify a recorded claim under various real-world audit conditions."""
@@ -222,30 +246,31 @@ def reverify_claim(req: ReverifyRequest):
             target_df = target_df[list(reversed(target_df.columns))]
             exec_mode = "code_rerun"
 
-        elif req.audit_mode == "simulated_library_drift":
-            orig_env = {"pandas": "2.1.0", "numpy": "1.26.4", "scikit-learn": "1.4.0"}
-            orig_hash, _ = compute_env_hash(orig_env)
+        # Environment & Library Drifts
+        elif req.audit_mode in ("simulated_library_drift", "env_drift_pandas_upgrade"):
+            orig_env = {"pandas": "2.1.0", "numpy": "1.26.4", "scipy": "1.11.4", "scikit-learn": "1.4.0"}
+            override_env_packages = {"pandas": "2.2.2", "numpy": "1.26.4", "scipy": "1.11.4", "scikit-learn": "1.4.0"}
+            _setup_env_drift(claim, session, orig_env, target_df)
 
-            claim.env_hash = orig_hash
-            snap = session.get(EnvironmentSnapshot, orig_hash)
-            if not snap:
-                snap = EnvironmentSnapshot(
-                    env_hash=orig_hash,
-                    captured_at=claim.created_at,
-                    library_versions=orig_env,
-                )
-                session.add(snap)
-            session.commit()
+        elif req.audit_mode == "env_drift_numpy_2_upgrade":
+            orig_env = {"pandas": "2.2.0", "numpy": "1.26.4", "scipy": "1.11.4", "scikit-learn": "1.4.0"}
+            override_env_packages = {"pandas": "2.2.0", "numpy": "2.1.0", "scipy": "1.11.4", "scikit-learn": "1.4.0"}
+            _setup_env_drift(claim, session, orig_env, target_df)
 
-            override_env_packages = {"pandas": "2.2.0", "numpy": "1.26.4", "scikit-learn": "1.4.0"}
-            num_cols = list(target_df.select_dtypes(include=["number"]).columns)
-            for col in num_cols:
-                target_df[col] = target_df[col].astype(float)
+        elif req.audit_mode == "env_drift_scipy_stats_upgrade":
+            orig_env = {"pandas": "2.2.0", "numpy": "1.26.4", "scipy": "1.11.4", "scikit-learn": "1.4.0"}
+            override_env_packages = {"pandas": "2.2.0", "numpy": "1.26.4", "scipy": "1.14.0", "scikit-learn": "1.4.0"}
+            _setup_env_drift(claim, session, orig_env, target_df)
 
-            if num_cols:
-                target_df[num_cols[0]] = target_df[num_cols[0]].iloc[::-1].values
-                if len(num_cols) > 1:
-                    target_df.loc[0, num_cols[1]] = float(target_df[num_cols[1]].max() * 3.5 + 20.0)
+        elif req.audit_mode == "env_drift_sklearn_upgrade":
+            orig_env = {"pandas": "2.2.0", "numpy": "1.26.4", "scipy": "1.11.4", "scikit-learn": "1.3.2"}
+            override_env_packages = {"pandas": "2.2.0", "numpy": "1.26.4", "scipy": "1.11.4", "scikit-learn": "1.5.1"}
+            _setup_env_drift(claim, session, orig_env, target_df)
+
+        elif req.audit_mode == "env_drift_multi_dependency":
+            orig_env = {"pandas": "2.1.0", "numpy": "1.24.3", "scipy": "1.10.1", "scikit-learn": "1.3.0", "statsmodels": "0.14.0"}
+            override_env_packages = {"pandas": "2.2.2", "numpy": "2.1.0", "scipy": "1.14.0", "scikit-learn": "1.5.1", "statsmodels": "0.14.2"}
+            _setup_env_drift(claim, session, orig_env, target_df)
 
         elif req.audit_mode == "simulated_data_drift":
             num_cols = list(target_df.select_dtypes(include=["number"]).columns)

@@ -103,12 +103,30 @@ def test_analyze_and_rich_audit_modes(client):
     # 7. Simulated Library Drift
     reverify_lib_drift = client.post(
         "/api/reverify",
-        json={"claim_id": claim_id, "audit_mode": "simulated_library_drift"},
+        json={"claim_id": claim_id, "audit_mode": "env_drift_pandas_upgrade"},
     )
     assert reverify_lib_drift.status_code == 200
     drift_data = reverify_lib_drift.json()
     assert drift_data["matched"] is False
     assert drift_data["diagnosis"]["cause"] == "library_version_change"
+
+    # 8. NumPy 2.0 ABI Drift
+    reverify_numpy = client.post(
+        "/api/reverify",
+        json={"claim_id": claim_id, "audit_mode": "env_drift_numpy_2_upgrade"},
+    )
+    assert reverify_numpy.status_code == 200
+    assert reverify_numpy.json()["matched"] is False
+    assert reverify_numpy.json()["diagnosis"]["cause"] == "library_version_change"
+
+    # 9. Cascading Multi-Dependency Drift
+    reverify_multi = client.post(
+        "/api/reverify",
+        json={"claim_id": claim_id, "audit_mode": "env_drift_multi_dependency"},
+    )
+    assert reverify_multi.status_code == 200
+    assert reverify_multi.json()["matched"] is False
+    assert reverify_multi.json()["diagnosis"]["cause"] == "library_version_change"
 
 
 def test_serve_spa_html(client):
