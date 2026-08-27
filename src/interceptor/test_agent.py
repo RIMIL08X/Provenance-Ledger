@@ -45,17 +45,12 @@ class MinimalDataScienceAgent:
         return "\n".join(cleaned_lines).strip()
 
     def _generate_code_mock(self, prompt: str, df: pd.DataFrame) -> str:
-        """Deterministic fallback code generator when offline."""
+        """Generic fallback code generator when offline, matching actual dataset columns."""
         prompt_lower = prompt.lower()
         cols = list(df.columns)
         num_cols = list(df.select_dtypes(include=["number"]).columns)
 
-        if "tenure" in prompt_lower and "churn" in prompt_lower and "tenure" in cols and "churn" in cols:
-            return (
-                "corr = float(df['tenure'].corr(df['churn']))\n"
-                "result = {'r': round(corr, 2), 'claim': f'Tenure is negatively correlated with churn (r = {round(corr, 2)})' if corr < 0 else f'Tenure is positively correlated with churn (r = {round(corr, 2)})'}"
-            )
-        elif len(num_cols) >= 2 and any(w in prompt_lower for w in ["corr", "predict", "relationship", "versus", "vs"]):
+        if len(num_cols) >= 2 and any(w in prompt_lower for w in ["corr", "predict", "relationship", "versus", "vs", "churn", "tenure"]):
             c1, c2 = num_cols[0], num_cols[1]
             return (
                 f"corr = float(df['{c1}'].corr(df['{c2}']))\n"
@@ -73,13 +68,19 @@ class MinimalDataScienceAgent:
                 f"val = float(df['{target}'].max())\n"
                 f"result = {{'value': round(val, 2), 'claim': f'The maximum {target} is {{round(val, 2)}}'}}"
             )
+        elif any(w in prompt_lower for w in ["min", "lowest", "minimum"]):
+            target = next((c for c in cols if c.lower() in prompt_lower), num_cols[0] if num_cols else cols[0])
+            return (
+                f"val = float(df['{target}'].min())\n"
+                f"result = {{'value': round(val, 2), 'claim': f'The minimum {target} is {{round(val, 2)}}'}}"
+            )
         elif any(w in prompt_lower for w in ["sum", "total"]):
             target = next((c for c in cols if c.lower() in prompt_lower), num_cols[0] if num_cols else cols[0])
             return (
                 f"val = float(df['{target}'].sum())\n"
                 f"result = {{'value': round(val, 2), 'claim': f'The total {target} is {{round(val, 2)}}'}}"
             )
-        elif any(w in prompt_lower for w in ["count", "rows", "size"]):
+        elif any(w in prompt_lower for w in ["count", "rows", "size", "length"]):
             return "cnt = int(len(df))\nresult = {'value': cnt, 'claim': f'Dataset contains {cnt} total rows'}"
         else:
             first_col = num_cols[0] if num_cols else cols[0]
@@ -104,7 +105,7 @@ class MinimalDataScienceAgent:
                 "1. DO NOT recreate, mock, or redefine `df`. Operate directly on `df`.\n"
                 "2. Write Python code to compute the exact answer to the user's question.\n"
                 "3. You MUST assign the final structured dictionary to the variable `result`.\n"
-                "4. `result` MUST have a 'claim' key with a concise, clear natural-language summary (e.g. 'Tenure is negatively correlated with churn (r = -0.42)' or 'The average salary is $105,200.00').\n"
+                "4. `result` MUST have a 'claim' key with a concise, clear natural-language summary (e.g. 'The correlation between tenure and churn is -0.42' or 'The average revenue is $105,200.00').\n"
                 "5. `result` SHOULD also include relevant numeric keys (e.g. 'r', 'value', 'mean', 'max', 'count').\n"
                 "6. Wrap ONLY executable Python code in ```python ``` fences."
             )

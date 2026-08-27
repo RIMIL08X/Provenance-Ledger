@@ -29,8 +29,6 @@ from src.store.repository import ProvenanceStore
 async def lifespan(app: FastAPI):
     """Ensure database schema is initialized on server start."""
     init_db()
-    # Save default dataset snapshot
-    DataIngestionEngine.parse_file(DEFAULT_CHURN_DF.to_csv(index=False).encode("utf-8"), "customer_churn.csv")
     yield
 
 
@@ -47,33 +45,17 @@ app.add_middleware(
 # In-memory store for active session datasets
 ACTIVE_DATASETS: Dict[str, pd.DataFrame] = {}
 
-# Default synthetic dataset for customer churn analysis
-DEFAULT_CHURN_DF = pd.DataFrame({
-    "customer_id": [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008],
-    "tenure": [1, 24, 60, 2, 48, 12, 70, 6],
-    "churn": [1, 0, 0, 1, 0, 1, 0, 1],
-    "monthly_charges": [85.0, 45.0, 20.0, 90.0, 50.0, 75.0, 25.0, 80.0],
-})
-
 
 class AnalyzeRequest(BaseModel):
-    prompt: str = "Does tenure predict customer churn?"
+    prompt: str
     model_name: str = "gemini-1.5-flash"
     seed: int = 17
-    data_hash: Optional[str] = None
+    data_hash: str
 
 
 class ReverifyRequest(BaseModel):
     claim_id: str
     audit_mode: str = "exact_code_rerun"
-    # Options:
-    # 'exact_code_rerun'
-    # 'agent_reinvocation_same_seed'
-    # 'cross_model_gemini_2_flash'
-    # 'cross_model_gemini_pro'
-    # 'batch_consistency_test'
-    # 'simulated_library_drift'
-    # 'simulated_data_drift'
 
 
 @app.get("/api/models")
@@ -105,13 +87,16 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.get("/api/dataset")
 def get_dataset(data_hash: Optional[str] = None):
-    """Return dataset preview by hash or default."""
-    if data_hash and data_hash in ACTIVE_DATASETS:
+    """Return dataset preview by hash."""
+    if not data_hash:
+        return {"columns": [], "records": [], "total_rows": 0}
+
+    if data_hash in ACTIVE_DATASETS:
         df = ACTIVE_DATASETS[data_hash]
-    elif data_hash:
-        df = DataIngestionEngine.load_snapshot(data_hash) or DEFAULT_CHURN_DF
     else:
-        df = DEFAULT_CHURN_DF
+        df = DataIngestionEngine.load_snapshot(data_hash)
+        if df is None:
+            raise HTTPException(status_code=404, detail="Dataset snapshot not found")
 
     return {
         "columns": list(df.columns),
@@ -122,13 +107,19 @@ def get_dataset(data_hash: Optional[str] = None):
 
 @app.post("/api/analyze")
 def run_analysis(req: AnalyzeRequest):
-    """Run data science agent on uploaded or default dataset with provenance interception."""
-    if req.data_hash and req.data_hash in ACTIVE_DATASETS:
+    """Run data science agent on uploaded dataset with provenance interception."""
+    if not req.prompt or not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
+
+    if not req.data_hash:
+        raise HTTPException(status_code=400, detail="No dataset provided. Please upload a dataset or document first.")
+
+    if req.data_hash in ACTIVE_DATASETS:
         target_df = ACTIVE_DATASETS[req.data_hash]
-    elif req.data_hash:
-        target_df = DataIngestionEngine.load_snapshot(req.data_hash) or DEFAULT_CHURN_DF
     else:
-        target_df = DEFAULT_CHURN_DF
+        target_df = DataIngestionEngine.load_snapshot(req.data_hash)
+        if target_df is None:
+            raise HTTPException(status_code=400, detail="Dataset snapshot not found. Please upload your file first.")
 
     agent = MinimalDataScienceAgent(
         model_name=req.model_name,
@@ -176,8 +167,10 @@ def reverify_claim(req: ReverifyRequest):
 
         # Load exact historical data snapshot
         loaded_df = DataIngestionEngine.load_snapshot(claim.data_snapshot_hash)
-        target_df = loaded_df.copy() if loaded_df is not None else DEFAULT_CHURN_DF.copy()
+        if loaded_df is None:
+            raise HTTPException(status_code=404, detail="Original data snapshot not found on disk")
 
+        target_df = loaded_df.copy()
         override_env_packages = None
         target_model = claim.model_name
         exec_mode = "code_rerun"
@@ -220,15 +213,19 @@ def reverify_claim(req: ReverifyRequest):
             session.commit()
 
             override_env_packages = {"pandas": "2.2.0", "numpy": "1.26.4", "scikit-learn": "1.4.0"}
-            # Mutate data calculation
             num_cols = list(target_df.select_dtypes(include=["number"]).columns)
+            for col in num_cols:
+                target_df[col] = target_df[col].astype(float)
+
             if num_cols:
                 target_df[num_cols[0]] = target_df[num_cols[0]].iloc[::-1].values
                 if len(num_cols) > 1:
-                    target_df.loc[0, num_cols[1]] = target_df[num_cols[1]].max() * 3.5 + 20.0
+                    target_df.loc[0, num_cols[1]] = float(target_df[num_cols[1]].max() * 3.5 + 20.0)
 
         elif req.audit_mode == "simulated_data_drift":
             num_cols = list(target_df.select_dtypes(include=["number"]).columns)
+            for col in num_cols:
+                target_df[col] = target_df[col].astype(float)
             if num_cols:
                 target_df[num_cols[0]] = target_df[num_cols[0]].iloc[::-1].values
 

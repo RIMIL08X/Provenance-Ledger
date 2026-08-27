@@ -25,15 +25,6 @@ def test_get_models_endpoint(client):
     assert "gemini-1.5-flash" in data["models"]
 
 
-def test_get_dataset_endpoint(client):
-    res = client.get("/api/dataset")
-    assert res.status_code == 200
-    data = res.json()
-    assert "columns" in data
-    assert "records" in data
-    assert data["total_rows"] > 0
-
-
 def test_upload_file_endpoint(client):
     csv_bytes = b"user_id,revenue\n101,500.0\n102,750.0\n103,1200.0\n"
     files = {"file": ("sales.csv", io.BytesIO(csv_bytes), "text/csv")}
@@ -46,10 +37,22 @@ def test_upload_file_endpoint(client):
 
 
 def test_analyze_and_rich_audit_modes(client):
+    # 0. Upload test dataset
+    csv_bytes = b"tenure,churn\n1,1\n24,0\n60,0\n2,1\n48,0\n12,1\n70,0\n6,1\n"
+    files = {"file": ("customer_churn.csv", io.BytesIO(csv_bytes), "text/csv")}
+    upload_res = client.post("/api/upload", files=files)
+    assert upload_res.status_code == 200
+    data_hash = upload_res.json()["data_hash"]
+
     # 1. Analyze
     analyze_res = client.post(
         "/api/analyze",
-        json={"prompt": "Does tenure predict customer churn?", "model_name": "gemini-1.5-flash", "seed": 17},
+        json={
+            "prompt": "What is the correlation between tenure and churn?",
+            "model_name": "gemini-1.5-flash",
+            "seed": 17,
+            "data_hash": data_hash,
+        },
     )
     assert analyze_res.status_code == 200
     claim_data = analyze_res.json()
