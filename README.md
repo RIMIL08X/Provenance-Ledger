@@ -55,34 +55,32 @@
 
 ## 📜 The Lore: The Silent Crisis of Agentic Data Science
 
-> *"In the era of autonomous data science, numbers rule enterprises. But when an AI agent reports a critical finding, can you prove it wasn't a phantom created by a silent library upgrade or random sampling jitter?"*
+> *"When an autonomous AI agent claims **'Tenure mitigates churn (r = -0.42)'**, how do you prove it wasn't a phantom created by a silent library upgrade or random sampling jitter?"*
 
-### Chapter I: The Hallucination of Certainty
-In boardrooms, hospitals, and hedge funds, autonomous LLM agents are rapidly taking the reins of exploratory data analysis. They receive spreadsheets, ingest patient registries, write arbitrary pandas scripts on the fly, and output decisive claims:
-> **"Customer tenure strongly mitigates churn ($r = -0.42, p < 0.001$)."**  
-> **"Drug compound B demonstrates a 34% efficacy jump over baseline."**
+### ⚡ The Dilemma: The Disappearing Chain of Evidence
+Autonomous LLM agents are rapidly taking the reins of enterprise data analysis. They ingest spreadsheets, write dynamic pandas code on the fly, and output high-stakes numerical claims.
 
-Executives make multi-million-dollar decisions based on these summaries. Data science teams commit models into production based on these numbers.
+**Three weeks later, an automated re-run reports $r = -0.31$.** Why?
+- 📉 **Did the raw data mutate?** (Data drift)
+- 📦 **Did a minor package upgrade (`pandas 2.1.0` → `2.2.0`) silently alter calculation routines?** (Library drift)
+- ⚡ **Did the cloud LLM silently update its weights?** (Model version shift)
+- 🎲 **Or was it pure stochastic sampling jitter?**
 
-### Chapter II: The Silent Drift
-Three weeks later, an automated pipeline re-runs the analysis. The new claim is **$r = -0.31$**. Or worse: the conclusion flips entirely.
+In modern data stacks, **nobody knows**. The code executed in an ephemeral sandbox, the dataset snapshot was never cryptographically hashed, and the environment was never fingerprinted.
 
-Panic ensues. What happened?
-1. **Did the raw underlying data mutate?** (Data drift)
-2. **Did a minor package upgrade silently alter numerical routines?** (e.g., `pandas 2.1.0` $\rightarrow$ `2.2.0` changing default interpolation, or `scikit-learn` changing default regularizers)
-3. **Did the LLM model version silently upgrade under the hood?** (`gemini-1.5-flash` $\rightarrow$ `gemini-2.0-flash`)
-4. **Or was it pure stochastic temperature jitter?**
+### 🛡️ The Paradigm Shift: Why Provenance Ledger?
 
-In modern data stacks, **nobody knows**. The generated code was executed in an ephemeral Jupyter kernel or microservice. The exact in-memory DataFrame snapshot was never hashed. The environment package versions were never fingerprinted. The chain of evidence is gone forever.
+Existing MLOps and LLM observability tools were designed for a different era. **Provenance Ledger builds the missing cryptographic audit layer**:
 
-### Chapter III: The Birth of Provenance Ledger
-**Provenance Ledger** was created as the immutable cryptographic black-box recorder for LLM data science agents.
+| Capability | Traditional MLOps *(MLflow / W&B)* | LLM Observability *(LangSmith / Langfuse)* | **Provenance Ledger** 🌌 |
+| :--- | :--- | :--- | :--- |
+| **Core Focus** | Model weights & training loss | Token counts & prompt latency | **Analytical claims, code determinism & silent drift** |
+| **Data Lineage** | ⚠️ Raw file paths / URLs | ❌ No data awareness | ✅ **Canonical SHA-256 in-memory DataFrame snapshots** |
+| **Root-Cause Attribution** | ❌ Manual debugging | ❌ Manual inspection | ✅ **Automated 4-stage decision tree** (Model vs Lib vs Data vs Jitter) |
+| **Reproducibility Metric** | ❌ None | ❌ None | ✅ **Empirical Multi-Trial Scoring ($\mathcal{R}_{score} \in [0\%, 100\%]$)** |
+| **Universal Ingestion** | ⚠️ CSV only | ❌ Prompt text only | ✅ **Spreadsheets, PDFs, Word docs, Parquet, JSON** |
 
-Just as financial ledgers audit every cent, **Provenance Ledger audits every analytical claim**. It sits invisibly beneath the agent, capturing the exact prompt, the canonical SHA-256 hash of the dataset, the exact environment package tree, the generated code, and the structured numerical claims into a durable **PostgreSQL 16** ledger.
-
-When an audit is triggered, Provenance Ledger re-executes the pipeline across a matrix of controlled conditions, diagnoses the exact root cause of any numerical or semantic divergence, and issues an empirical **Reproducibility Score ($\mathcal{R}_{score}$)**.
-
-**Welcome to trustworthy, auditable, and self-diagnosing agentic intelligence.**
+Just as financial ledgers audit every cent, **Provenance Ledger audits every analytical claim**—turning ephemeral AI data science into a verifiable, self-diagnosing engineering discipline.
 
 ---
 
