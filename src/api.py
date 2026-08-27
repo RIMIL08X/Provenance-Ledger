@@ -82,6 +82,8 @@ async def upload_file(file: UploadFile = File(...)):
             "summary": summary,
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"File parsing error: {str(e)}")
 
 
